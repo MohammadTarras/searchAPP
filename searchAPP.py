@@ -257,7 +257,7 @@ if credentials_dict and folder_id:
         with col1:
             if st.button("🔄 Build/Rebuild Index"):
                 with st.spinner("Indexing images from Google Drive..."):
-                    st.session_state.search_engine.build_index(force_rebuild=True)
+                    st.session_state.search_engine.build_index()
                 st.success("Index built successfully!")
         
         with col2:
