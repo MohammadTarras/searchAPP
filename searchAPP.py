@@ -31,34 +31,6 @@ class GoogleDriveImageSearchEngine:
             scopes=['https://www.googleapis.com/auth/drive.readonly']
         )
         self.drive_service = build('drive', 'v3', credentials=credentials)
-            
-
-    # 🔐 Explicit validation
-        self.folder_info = self.validate_folder_access()
-    def validate_folder_access(self):
-        """
-        Validates:
-        1. Credentials are valid
-        2. Folder exists
-        3. Service account has access
-        """
-        try:
-            folder = self.drive_service.files().get(
-                fileId=self.folder_id,
-                fields="id, name, mimeType"
-            ).execute()
-
-            if folder["mimeType"] != "application/vnd.google-apps.folder":
-                raise ValueError("Provided folder_id is NOT a folder")
-
-            return {
-                "status": "connected",
-                "folder_id": folder["id"],
-                "folder_name": folder["name"]
-            }
-
-        except Exception as e:
-            raise RuntimeError(f"❌ Google Drive folder access failed: {str(e)}")
 
     def list_images_in_folder(self):
         """List all images in the specified Google Drive folder"""
@@ -167,44 +139,100 @@ class GoogleDriveImageSearchEngine:
         status_text.empty()
 
         self.is_indexed = True
-        def compute_similarity(self, img1, img2):
-            """Compute SSIM similarity between two images"""
-            return ssim(img1, img2)
 
-        def search(self, query_image, similarity_threshold=0.2, limit=3):
-            """
-            Search for similar images
-            query_image: PIL Image or preprocessed numpy array
-            """
-            if not self.is_indexed:
-                self.build_index()
 
-            # Preprocess query image if it's a PIL Image
-            if isinstance(query_image, Image.Image):
-                query_img = self.preprocess_pil_image(query_image)
-            else:
-                query_img = query_image
+    # def build_index(self, force_rebuild=False):
+    #     """Build index of all images in Google Drive folder"""
+    #     if self.is_indexed and not force_rebuild:
+    #         return
 
-            results = []
-            for file_id, processed_img in self.image_features.items():
-                try:
-                    similarity = self.compute_similarity(query_img, processed_img)
-                    if similarity >= similarity_threshold:
-                        results.append((file_id, similarity))
-                except Exception as e:
-                    print(f"Error comparing with {file_id}: {e}")
+    #     # Try to load cached index
+    #     cache_file = "gdrive_index_cache.pkl"
+    #     if os.path.exists(cache_file) and not force_rebuild:
+    #         with open(cache_file, 'rb') as f:
+    #             cached_data = pickle.load(f)
+    #             self.image_features = cached_data['features']
+    #             self.image_metadata = cached_data['metadata']
+    #         self.is_indexed = True
+    #         return
 
-            results.sort(key=lambda x: x[1], reverse=True)
-            return results[:limit]
+    #     # Build new index
+    #     self.image_features = {}
+    #     self.image_metadata = {}
+        
+    #     files = self.list_images_in_folder()
+        
+    #     progress_bar = st.progress(0)
+    #     status_text = st.empty()
+        
+    #     for idx, file in enumerate(files):
+    #         try:
+    #             status_text.text(f"Processing {file['name']}... ({idx+1}/{len(files)})")
+                
+    #             # Download and process image
+    #             image_buffer = self.download_image(file['id'])
+    #             processed_img = self.preprocess_image_from_buffer(image_buffer)
+                
+    #             # Store features and metadata
+    #             self.image_features[file['id']] = processed_img
+    #             self.image_metadata[file['id']] = {
+    #                 'name': file['name'],
+    #                 'mimeType': file['mimeType']
+    #             }
+                
+    #             progress_bar.progress((idx + 1) / len(files))
+    #         except Exception as e:
+    #             st.warning(f"Error processing {file['name']}: {e}")
 
-        def get_image_url(self, file_id):
-            """Get a viewable URL for the image"""
-            return f"https://drive.google.com/uc?export=view&id={file_id}"
+    #     # Cache the index
+    #     with open(cache_file, 'wb') as f:
+    #         pickle.dump({
+    #             'features': self.image_features,
+    #             'metadata': self.image_metadata
+    #         }, f)
 
-        def download_image_as_base64(self, file_id):
-            """Download image and convert to base64"""
-            image_buffer = self.download_image(file_id)
-            return base64.b64encode(image_buffer.read()).decode()
+    #     progress_bar.empty()
+    #     status_text.empty()
+    #     self.is_indexed = True
+
+    def compute_similarity(self, img1, img2):
+        """Compute SSIM similarity between two images"""
+        return ssim(img1, img2)
+
+    def search(self, query_image, similarity_threshold=0.2, limit=3):
+        """
+        Search for similar images
+        query_image: PIL Image or preprocessed numpy array
+        """
+        if not self.is_indexed:
+            self.build_index()
+
+        # Preprocess query image if it's a PIL Image
+        if isinstance(query_image, Image.Image):
+            query_img = self.preprocess_pil_image(query_image)
+        else:
+            query_img = query_image
+
+        results = []
+        for file_id, processed_img in self.image_features.items():
+            try:
+                similarity = self.compute_similarity(query_img, processed_img)
+                if similarity >= similarity_threshold:
+                    results.append((file_id, similarity))
+            except Exception as e:
+                print(f"Error comparing with {file_id}: {e}")
+
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results[:limit]
+
+    def get_image_url(self, file_id):
+        """Get a viewable URL for the image"""
+        return f"https://drive.google.com/uc?export=view&id={file_id}"
+
+    def download_image_as_base64(self, file_id):
+        """Download image and convert to base64"""
+        image_buffer = self.download_image(file_id)
+        return base64.b64encode(image_buffer.read()).decode()
 
 
 # --- Streamlit App ---
