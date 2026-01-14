@@ -75,48 +75,47 @@ class GoogleDriveImageSearchEngine:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
         resized = cv2.resize(gray, (256, 256))
         return resized
-    def build_index(self, force_rebuild=False):
-        """Build index of all images in Google Drive folder (incremental)"""
-
-        # Force rebuild: wipe everything
-        if force_rebuild:
-            self.image_features = {}
-            self.image_metadata = {}
-            self.is_indexed = False
-
-        # Load cache if exists
+    
+    
+    def build_index(self):
+        """Index only images that are not already indexed"""
+        
         cache_file = "gdrive_index_cache.pkl"
-        if os.path.exists(cache_file) and not force_rebuild:
+        
+        # Load cached index if exists
+        if os.path.exists(cache_file):
             with open(cache_file, 'rb') as f:
                 cached_data = pickle.load(f)
                 self.image_features = cached_data.get('features', {})
                 self.image_metadata = cached_data.get('metadata', {})
-            self.is_indexed = True
+        else:
+            self.image_features = {}
+            self.image_metadata = {}
 
-        # Fetch current images from Drive
         files = self.list_images_in_folder()
-
-        # Determine which images are NEW
-        existing_ids = set(self.image_features.keys())
-        new_files = [f for f in files if f['id'] not in existing_ids]
-
+        if not files:
+            st.info("No images found in the folder.")
+            return
+        
+        # Filter files that are already indexed
+        new_files = [f for f in files if f['id'] not in self.image_metadata]
         if not new_files:
-            st.info("✅ Index is already up to date. No new images found.")
+            st.success("All images are already indexed!")
             self.is_indexed = True
             return
-
-        st.info(f"🆕 Found {len(new_files)} new images. Indexing...")
 
         progress_bar = st.progress(0)
         status_text = st.empty()
 
         for idx, file in enumerate(new_files):
             try:
-                status_text.text(f"Indexing {file['name']} ({idx+1}/{len(new_files)})")
-
+                status_text.text(f"Processing {file['name']} ({idx+1}/{len(new_files)})")
+                
+                # Download and process image
                 image_buffer = self.download_image(file['id'])
                 processed_img = self.preprocess_image_from_buffer(image_buffer)
-
+                
+                # Store features and metadata
                 self.image_features[file['id']] = processed_img
                 self.image_metadata[file['id']] = {
                     'name': file['name'],
@@ -124,11 +123,11 @@ class GoogleDriveImageSearchEngine:
                 }
 
                 progress_bar.progress((idx + 1) / len(new_files))
-
+            
             except Exception as e:
                 st.warning(f"Error processing {file['name']}: {e}")
-
-        # Save updated cache
+        
+        # Update cache
         with open(cache_file, 'wb') as f:
             pickle.dump({
                 'features': self.image_features,
@@ -137,9 +136,8 @@ class GoogleDriveImageSearchEngine:
 
         progress_bar.empty()
         status_text.empty()
-
+        st.success(f"Indexed {len(new_files)} new images successfully!")
         self.is_indexed = True
-
 
     # def build_index(self, force_rebuild=False):
     #     """Build index of all images in Google Drive folder"""
@@ -240,20 +238,7 @@ class GoogleDriveImageSearchEngine:
 st.set_page_config(page_title="Google Drive Image Search", layout="centered")
 st.title("🔍 Google Drive Image Search")
 
-credentials_dict = {
-  "type": "service_account",
-  "project_id": "valiant-sanctum-440111-c0",
-  "private_key_id": "a39bd2e2d98242a3690903e9678c6b4282cd6a7b",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCZh6XqSO0ZC66Z\nA+aqvV+PeWqITu+IkFTcYukPCQKYTvK9DH/xY6J821wyTBYjbyo/3+xsSfKi85uN\nHoU27u+d2iSZO98DABbso4VmTsrfADPOwa7iJyu0AG3iJuVQWiyomxi6xQfcCs1u\nSIvpJjvEJPu98R48I8k7WqD4LYr7UOwZ1M/FUNzhIPr0dy+7VoLnbjGYvjtcCXKs\niSYLxP4bwKpGcAuJhb8FaszO9ZhO20yEPgK+ejsxgpYwlcBL2LH2VRT0LqXXuflE\n0xmQ/nHnGkKDfktwmrU2fg64VQZ8lOxf+Trp4e4SmVf1xz4RCH03+GKpQCkQ8pwL\njqcwhXRBAgMBAAECggEASAv+ga/AR/ER+a95dyVQK1GUeyvjv2fP0u49pTcatyPR\nSIMNpVcWwNXl8ZqABxfbMUdhOL4I9YwxMmugoxNEcgSVCS2t7UgE+f6Qkt6l2DlN\nlpiQe4NbQGi1KBwNn4P5khPaaocctZeCKN81fO9au6SJWGzGvf0jKU3R3TTuFBn+\nwqsU18ISxArNdyLwmM/KJFjhA5LksfGPsZgPSDQTGG2E+KXvwLcH5T4qRx4AZjnI\n0iNsqSbo1sZMT5M5EFYeB4EZsb+3oR+3r+xeF8wLx1+3k78X2L+f6mr/9bmeRLgx\nxTMICq3uHj/iToeVhiln0/2WnJ0yZwBj5LB+WvTj0wKBgQDORdv3Bwwpljw1KFQj\ngltDvKo8a0qFvWytH7MzmgqN5Pmnzj9kRPGhu7M+/6VwVxMjqUL7VtHGdYdUvXim\nptp84XmfO+V5lTytlrg6TNyj0B2r/BT8qeRruVbqumr9bQ/S07IbrkZcN2FYpoG5\nZT5LPnADzRfD2cCiM46VDaTumwKBgQC+isBeSlln9JLG9HenqrAhqVtAYHdfucm+\nujMH8nOaV3Xmzac2dcEayMlKzKSYMKIW5rUAO7CuH1sxazFwTQT64zH+jQB44zKe\nWk2D3x+dfam+c3pomCkQrFRskRo4BZCTEhmavPvEf3nV3HBdkj1smfc5cBW9vmME\ngH/eXZnIUwKBgDm8hB1Y86aQTrnyV9q4miMTo/LVdT6KDulGfjprW5jsBpVZvZSr\nV5cVms5/cCdJuCm7Lux7GKycKQ0nG6ZJ/c4GrqxLb6fgheNw1JA9A2U205dYL+ep\nBi7A6fs5wsi8xjkU2D23Qip9tdnCgX0LQax+BYyK06QWRz0fgUFnWEsRAoGAPpfk\nE9WGw1CjuvnqKMk4rQYudNp7vJWSwbX3N6Ac+9HJaHWcfZZ3Ri45efn6BAjN5ooJ\nYbc6Fik00uosxoB2p1hlPwLg6dVw9nYhyrVMdHcogOj8iEmcC98gqL2OCGNDmBy1\nDpEQf/+EbY3J1+NHjFqTzWmVqsxVSNBRsSG8eAMCgYEAlfK2iwVzYSTk8QpQzqUN\nT8G/SwD+fnvalFpM1bsmN/cD99/KukC7BuHP/S2eDrxyAu94aab1L7ZroKXN8sNa\nghfbx6TiP26ubstI7zNcrOV2yGvUrw8rRaVYli4tuFq2g6hJytTJGV6ewWdPtyAw\nQpsc/j0mkLGnmVfaMsEl/T4=\n-----END PRIVATE KEY-----\n",
-  "client_email": "search@valiant-sanctum-440111-c0.iam.gserviceaccount.com",
-  "client_id": "101999105921427632787",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/search%40valiant-sanctum-440111-c0.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
-}
-
+credentials_dict = json.loads(st.secrets["gcp"]["service_account"])
 folder_id = '1satMPzcyiIQNADcRevQMZz1DaimAshXS'
 
 # Initialize search engine when credentials and folder ID are provided
