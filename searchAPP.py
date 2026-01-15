@@ -139,60 +139,6 @@ class GoogleDriveImageSearchEngine:
         st.success(f"Indexed {len(new_files)} new images successfully!")
         self.is_indexed = True
 
-    # def build_index(self, force_rebuild=False):
-    #     """Build index of all images in Google Drive folder"""
-    #     if self.is_indexed and not force_rebuild:
-    #         return
-
-    #     # Try to load cached index
-    #     cache_file = "gdrive_index_cache.pkl"
-    #     if os.path.exists(cache_file) and not force_rebuild:
-    #         with open(cache_file, 'rb') as f:
-    #             cached_data = pickle.load(f)
-    #             self.image_features = cached_data['features']
-    #             self.image_metadata = cached_data['metadata']
-    #         self.is_indexed = True
-    #         return
-
-    #     # Build new index
-    #     self.image_features = {}
-    #     self.image_metadata = {}
-        
-    #     files = self.list_images_in_folder()
-        
-    #     progress_bar = st.progress(0)
-    #     status_text = st.empty()
-        
-    #     for idx, file in enumerate(files):
-    #         try:
-    #             status_text.text(f"Processing {file['name']}... ({idx+1}/{len(files)})")
-                
-    #             # Download and process image
-    #             image_buffer = self.download_image(file['id'])
-    #             processed_img = self.preprocess_image_from_buffer(image_buffer)
-                
-    #             # Store features and metadata
-    #             self.image_features[file['id']] = processed_img
-    #             self.image_metadata[file['id']] = {
-    #                 'name': file['name'],
-    #                 'mimeType': file['mimeType']
-    #             }
-                
-    #             progress_bar.progress((idx + 1) / len(files))
-    #         except Exception as e:
-    #             st.warning(f"Error processing {file['name']}: {e}")
-
-    #     # Cache the index
-    #     with open(cache_file, 'wb') as f:
-    #         pickle.dump({
-    #             'features': self.image_features,
-    #             'metadata': self.image_metadata
-    #         }, f)
-
-    #     progress_bar.empty()
-    #     status_text.empty()
-    #     self.is_indexed = True
-
     def compute_similarity(self, img1, img2):
         """Compute SSIM similarity between two images"""
         return ssim(img1, img2)
@@ -269,88 +215,8 @@ if credentials_dict and folder_id:
         # Image input methods
         st.subheader("Search for Similar Images")
         
-        tab1, tab2 = st.tabs(["📋 Paste from Clipboard", "📁 Upload Image"])
+        tab2 = st.tabs([ "📁 Upload Image"])
         
-        with tab1:
-            st.info("💡 Tip: Take a screenshot (Win+Shift+S or Cmd+Shift+4), then paste here with Ctrl+V / Cmd+V")
-            clipboard_image = st.file_uploader(
-                "Paste or upload your image:",
-                type=['png', 'jpg', 'jpeg', 'bmp'],
-                key="clipboard"
-            )
-            
-            if clipboard_image:
-                pil_image = Image.open(clipboard_image)
-                st.image(pil_image, caption="Query Image", use_container_width=True)
-                
-                if st.button("🔍 Search", key="search_clipboard"):
-                    with st.spinner("Searching for similar images..."):
-                        results = st.session_state.search_engine.search(
-                            pil_image,
-                            similarity_threshold=0.2,
-                            limit=3
-                        )
-                    
-                    if results:
-                        st.success(f"Found {len(results)} similar images!")
-                        
-                        for idx, (file_id, similarity) in enumerate(results):
-                            metadata = st.session_state.search_engine.image_metadata[file_id]
-                            
-                            st.markdown(f"### Match {idx+1}: {metadata['name']}")
-                            st.progress(similarity, text=f"Similarity: {similarity:.2%}")
-                            
-                            # Get image as base64
-                            img_base64 = st.session_state.search_engine.download_image_as_base64(file_id)
-                            
-                            # Display with Fancybox
-                            html_code = f"""
-                            <html>
-                            <head>
-                            <link href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@4.0/dist/fancybox.css" rel="stylesheet" />
-                            <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@4.0/dist/fancybox.umd.js"></script>
-                            <style>
-                            .image-container {{
-                                text-align: center;
-                                margin: 10px auto;
-                            }}
-                            img {{
-                                max-width: 100%;
-                                max-height: 400px;
-                                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-                                cursor: zoom-in;
-                                border-radius: 8px;
-                            }}
-                            </style>
-                            </head>
-                            <body>
-                            <div class="image-container">
-                                <a href="data:image/png;base64,{img_base64}" data-fancybox="gallery-{idx}" data-caption="{metadata['name']}">
-                                    <img src="data:image/png;base64,{img_base64}" alt="{metadata['name']}" />
-                                </a>
-                            </div>
-                            <script>
-                            Fancybox.bind("[data-fancybox]", {{
-                                Toolbar: {{
-                                    display: [
-                                        {{ id: "zoom", position: "right" }},
-                                        {{ id: "fullscreen", position: "right" }},
-                                        {{ id: "close", position: "right" }},
-                                    ],
-                                }},
-                            }});
-                            </script>
-                            </body>
-                            </html>
-                            """
-                            components.html(html_code, height=450)
-                            
-                            # Link to open in Google Drive
-                            drive_url = f"https://drive.google.com/file/d/{file_id}/view"
-                            st.markdown(f"[📂 Open in Google Drive]({drive_url})")
-                            st.markdown("---")
-                    else:
-                        st.warning("No similar images found. Try adjusting the similarity threshold.")
         
         with tab2:
             uploaded_file = st.file_uploader(
