@@ -215,7 +215,7 @@ if credentials_dict and folder_id:
         # Image input methods
         st.subheader("Search for Similar Images")
         
-        tab2 = st.tabs([ "📁 Upload Image"])
+        tab2,  = st.tabs([ "📁 Upload Image"])
         
         
         with tab2:
