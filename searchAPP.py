@@ -185,7 +185,7 @@ st.set_page_config(page_title="Google Drive Image Search", layout="centered")
 st.title("🔍 Google Drive Image Search")
 
 credentials_dict = json.loads(st.secrets["gcp"]["service_account"])
-folder_id = '1satMPzcyiIQNADcRevQMZz1DaimAshXS'
+folder_id = '1cYgr_fl7HTA7e2z--uxQZPF2GEikMwR0'
 
 # Initialize search engine when credentials and folder ID are provided
 if credentials_dict and folder_id:
